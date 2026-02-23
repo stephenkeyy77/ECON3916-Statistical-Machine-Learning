@@ -1,0 +1,62 @@
+# Hypothesis Testing & Causal Evidence Architecture
+
+> *"A theory that cannot be falsified is not science — it's storytelling."* — Karl Popper
+
+---
+
+## Objective
+
+Most applied analytics stops at **estimation**: computing a mean, fitting a regression, reporting a coefficient. This project goes one step further — into **falsification**.
+
+Using the Lalonde (1986) experimental dataset, I operationalized the scientific method to adjudicate between two competing causal narratives: *did job training actually move the needle on earnings, or is the observed difference just noise?* The core epistemological pivot is from "what is the effect?" to "can we statistically rule out the possibility that there is no effect at all?"
+
+This distinction is not academic. In production ML systems, the inability to falsify a hypothesis is the root cause of data dredging, p-hacking, and the deployment of models that perform in backtests and fail in markets.
+
+---
+
+## Technical Approach
+
+**Dataset:** Lalonde (1986) Experimental Subset — a randomized control trial measuring the impact of vocational job training on 1978 real earnings (`re78`).
+
+**Parametric Test — Welch's T-Test (Signal-to-Noise Framework)**
+
+- Framed the t-statistic explicitly as a **Signal-to-Noise Ratio**: the Average Treatment Effect (ATE) divided by the standard error of that estimate.
+- Used `scipy.stats.ttest_ind` with `equal_var=False` (Welch's correction) to account for heteroskedasticity between treatment and control groups — a more defensible assumption than pooled variance when group sizes or variances differ.
+- Applied a significance threshold of α = 0.05 to **control the Type I error rate**, ensuring that the probability of a false positive (incorrectly rejecting a true null) was bounded before any data was examined.
+
+**Non-Parametric Validation — Permutation Test (10,000 Resamples)**
+
+- Earnings data is right-skewed and heavy-tailed — a known violation of the normality assumption underlying parametric tests. To stress-test the T-test result, I ran a `stats.permutation_test` with `n_resamples=10,000`.
+- The permutation test builds an **empirical null distribution** by repeatedly shuffling treatment labels, simulating the world where training has zero effect. The observed ATE is then evaluated against this distribution.
+- Convergence of the parametric and non-parametric p-values confirms the result is **robust to distributional assumptions** — not an artifact of Gaussian approximation.
+
+---
+
+## Key Findings
+
+| Metric | Value |
+|---|---|
+| Mean Earnings — Treated | $6,349 |
+| Mean Earnings — Control | $4,554 |
+| Average Treatment Effect (Signal) | ~+$1,795 |
+| Welch's T-Test P-Value | < 0.05 |
+| Permutation Test P-Value | Consistent with T-Test |
+| Decision | **Reject H₀** |
+
+The null hypothesis — that job training has no effect on earnings — was rejected via **Proof by Statistical Contradiction**. The observed lift of ~$1,795 is unlikely to be attributable to chance under the null distribution.
+
+---
+
+## Business Insight: Hypothesis Testing as the Safety Valve of the Algorithmic Economy
+
+Modern data pipelines are extraordinarily good at finding patterns. They are considerably worse at distinguishing **genuine signal from spurious correlation**. As datasets grow larger, the risk paradoxically increases: with enough features and enough compute, you can always find a statistically significant relationship — even in pure noise — if you look hard enough. This is the core problem of **data dredging**.
+
+Rigorous hypothesis testing — specifically, pre-committing to a null hypothesis, a test statistic, and a significance threshold *before* running the analysis — is the institutional check on this failure mode. It forces the analyst to take a falsifiable position and accept the cost of being wrong.
+
+In the context of asset management and equity research, this discipline is existential. A spurious factor in a quant model doesn't just underperform — it can introduce correlated tail risk that only manifests under stress. The same logic applies to algorithmic hiring, credit scoring, and any decision system where a false positive has asymmetric real-world consequences.
+
+Hypothesis testing, properly applied, is not a statistical formality. It is the **epistemological safety valve** that separates evidence-based inference from pattern-matched overfit.
+
+---
+
+*Tools: Python · SciPy · Pandas · Seaborn · Lalonde (1986) Experimental Data*
